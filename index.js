@@ -502,10 +502,23 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       // 写入文件，所有 worker 通过 getToken() 读取
       try {
         const envPath = path.join(__dirname, '.env');
-        let envContent = fs.readFileSync(envPath, 'utf-8');
-        envContent = envContent.replace(/^IOT_TOKEN=.*$/m, `IOT_TOKEN=${loginRes.data.result.token}`);
+        let envContent;
+        try {
+          envContent = fs.readFileSync(envPath, 'utf-8');
+        } catch (_) {
+          envContent = '# IoT Proxy Config\nIOT_BASE_URL=' + (process.env.IOT_BASE_URL || '') + '\n';
+        }
+        const token = loginRes.data.result.token;
+        if (envContent.includes('IOT_TOKEN=')) {
+          envContent = envContent.replace(/^IOT_TOKEN=.*$/m, `IOT_TOKEN=${token}`);
+        } else {
+          envContent += `IOT_TOKEN=${token}\n`;
+        }
         fs.writeFileSync(envPath, envContent, 'utf-8');
       } catch (e) { console.error('[login] Token保存失败:', e.message); }
+      // 确保进程级变量立即生效
+      process.env.IOT_TOKEN = loginRes.data.result.token;
+      cachedToken = loginRes.data.result.token;
       return res.json({ code: 0, msg: '登录成功' });
     }
     return res.json({ code: -1, msg: loginRes.data?.message || '验证码错误' });
